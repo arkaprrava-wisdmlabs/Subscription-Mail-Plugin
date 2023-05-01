@@ -14,6 +14,7 @@ if(!defined('ABSPATH')){
 }
 
 function es_enqueue_scripts(){
+    wp_enqueue_style( 'custom-css', plugins_url( 'assets/css/custom.css', __FILE__ ));
     wp_enqueue_script( 'ajax-script', plugins_url( 'assets/js/ajax-script.js', __FILE__ ), array('jquery'), null, true );
     wp_localize_script( 'ajax-script', 'js_config', array(
         'ajax_url' => admin_url( 'admin-ajax.php' ),
@@ -49,7 +50,7 @@ register_deactivation_hook( __FILE__, 'es_deactivation' );
 function es_shortcode() {
     ob_start();
     ?>
-    <form method="post" id="subscription_form">
+    <form method="post" id="subscription_form" class="subscription">
         <h1>Email Subscription</h1>
         <input type="email" name="email" id="email" placeholder="Enter Your Email" />
         <button type="submit" name="submit">Subscribe</button>
@@ -94,20 +95,64 @@ function ajax_subscribe(){
         wp_send_json_error( 'Invalid Email', '403' );
     }
 }
-function es_admin_menu(){
-    add_menu_page(
-        __('Email Subscription','es'),
-        'Email Subscription',
-        'manage_options',
-        'email-subscription',
-		'es_admin_menu_content',
-        '',
-        100
-    );
+function es_settings_init() {
+	register_setting( 'es', 'es_options' );
+
+	add_settings_section(
+		'es_settings_section',
+		'', '',
+		'es'
+	);
+	add_settings_field(
+		'es_settings_field',
+		__( 'post links per updation', 'es' ),
+		'es_settings_field_callback',
+		'es',
+		'es_settings_section',
+	);
 }
-add_action( 'admin_menu', 'es_admin_menu' );
-function es_admin_menu_content(){
-    
+
+add_action( 'admin_init', 'es_settings_init' );
+
+function es_settings_field_callback() {
+	$options = get_option( 'es_options' );
+	?>
+	<input type="number" name="es_options" id="es_options" placeholder="no. of latest post" value="<?php echo $options; ?>">
+	<?php
+}
+
+function es_options_page() {
+	add_menu_page(
+		__('Email Subscription','es'),
+		'Email Subscription',
+		'manage_options',
+		'es',
+		'es_options_page_html'
+	);
+}
+
+add_action( 'admin_menu', 'es_options_page' );
+
+function es_options_page_html() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	if ( isset( $_GET['settings-updated'] ) ) {
+		add_settings_error( 'es_messages', 'es_message', __( 'Settings Saved', 'es' ), 'updated' );
+	}
+	settings_errors( 'es_messages' );
+	?>
+	<div class="wrap">
+		<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+		<form action="options.php" method="post">
+			<?php
+			settings_fields( 'es' );
+			do_settings_sections( 'es' );
+			submit_button( 'Save Settings' );
+			?>
+		</form>
+	</div>
+	<?php
 }
 add_action('email_latest_posts_daily_to_subscribers','es_mail');
 function es_mail(){
@@ -123,6 +168,7 @@ function es_mail(){
     }
 }
 function es_data_loader(){
+    $post_per_page = get_option( 'es_options' );
     $news = array(
         'post_type'=>'news',
         'post_status'=>'publish',
@@ -130,7 +176,7 @@ function es_data_loader(){
             'column'  => 'post_date',
             'after'   => '- 1 days'
         ),
-        'posts_per_page' => '3'
+        'posts_per_page' => $post_per_page
     );
     $data = array();
     $query = new WP_query($news);
