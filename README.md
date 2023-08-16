@@ -1,0 +1,2 @@
+- This plugin adds a new table in database for holding emails
+- 
